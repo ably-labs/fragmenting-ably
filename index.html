@@ -1,0 +1,95 @@
+<html>
+<head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+    <meta content="utf-8">
+    <style>
+        ul {
+          list-style-type: none;
+        }
+    </style>
+    <script src="https://cdn.ably.io/lib/ably.min-1.js" type="text/javascript"></script>
+</head>
+<body>
+<input type="file" onchange="sendFile()"><br>
+<ul id="list"></ul>
+</body>
+<script type="text/javascript">
+var ably = new Ably.Realtime('INSERT_API_KEY_HERE');
+
+var channel = ably.channels.get("bob");
+
+var chunksSent = {};
+var msgRate = 50;
+var msgInterval = 1000 / msgRate;
+
+var ul = document.getElementById("list");
+
+var images = {};
+channel.subscribe(function(message) {
+    if (message.data.pos == 'end') {
+      var preview = new Image(300);
+      preview.src = images[message.name].join('');
+      var li = document.createElement("li");
+      li.appendChild(preview);
+      ul.appendChild(li);
+      images[message.name] = [];
+      return;
+    }
+    if (!images[message.name]) {
+        images[message.name] = [];
+    }
+    images[message.name][message.data.pos] = message.data.data;
+});
+
+function sendFile() {
+  var file = document.querySelector('input[type=file]').files[0];
+  var reader = new FileReader();
+
+  reader.addEventListener("load", function () {
+    var rnd = Math.random();
+    // convert image file to base64 string
+    var result = reader.result;
+    var chunks = result.match(/.{1,15000}/g);
+    chunksSent[rnd] = 0;
+    for (var i=0; i < chunks.length; i++) {
+      sendMessages(rnd, chunks, i);
+    }
+  }, false);
+
+  if (file) {
+    reader.readAsDataURL(file);
+  }
+}
+
+
+function sendMessages(id, data, pos) {
+  setTimeout(function() {
+    channel.publish("id:" + id, {
+          'pos': pos,
+          'data': data[pos]
+    }, function(err) {
+      if (err) {
+        console.log(err);
+        setTimeout(function() { sendMessages(id, data, pos); }, 1000);
+      } else {
+        chunksSent[id]++;
+        if (chunksSent[id] == data.length) {
+          sendEnd(id);
+          chunksSent[id] = 0;
+        }
+      }
+    });
+  }, msgInterval * pos);
+}
+
+function sendEnd(id, pos) {
+  channel.publish("id:" + id, {
+    'pos': 'end'
+  }, function(err) {
+    if (err) {
+      setTimeout(function() { sendEnd(id); }, 1000);
+    }
+  });
+}
+</script>
+</html>
