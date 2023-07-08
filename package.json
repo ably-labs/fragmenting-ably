@@ -9,6 +9,6 @@
   "author": "Tom Camp",
   "license": "ISC",
   "dependencies": {
-    "ably": "^1.2.6"
+    "ably": "^1.2.41"
   }
 }
